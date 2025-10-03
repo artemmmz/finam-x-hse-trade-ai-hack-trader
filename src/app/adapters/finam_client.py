@@ -30,7 +30,7 @@ class FinamAPIClient:
 
         if self.access_token:
             self.session.headers.update({
-                "Authorization": f"Bearer {self.access_token}",
+                "Authorization": f"{self.access_token}",
                 "Content-Type": "application/json",
             })
 
@@ -134,3 +134,7 @@ class FinamAPIClient:
     def get_session_details(self) -> dict[str, Any]:
         """Получить детали текущей сессии"""
         return self.execute_request("POST", "/v1/sessions/details")
+
+    def get_assets(self) -> dict[str, Any]:
+        """Получить доступные активы"""
+        return self.execute_request("GET", "/v1/assets")
