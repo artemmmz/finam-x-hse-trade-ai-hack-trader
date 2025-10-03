@@ -14,53 +14,7 @@ import streamlit as st
 
 from src.app.adapters import FinamAPIClient
 from src.app.core import call_llm, get_settings
-
-
-def create_system_prompt(finam_client: FinamAPIClient) -> str:
-    """Создать системный промпт для AI ассистента"""
-    # assets = finam_client.get_assets().get("assets", [])
-    # assets_text = "\n".join([f"- Symbol: {asset['symbol']}; имя: {asset['name']}" for asset in assets])
-    return (
-        "Ты - AI ассистент трейдера, работающий с Finam TradeAPI.\n\n"
-
-        "Когда пользователь задает вопрос о рынке, портфеле или хочет совершить действие:\n"
-        "1. Определи нужный API endpoint\n"
-        "2. Укажи запрос в формате: API_REQUEST: METHOD /path\n"
-        "3. После получения данных - проанализируй их и дай понятный ответ\n\n"
-        
-        "Доступные endpoints:\n"
-        "- GET /v1/instruments/{symbol}/quotes/latest - котировка\n"
-        "- GET /v1/instruments/{symbol}/orderbook - стакан\n"
-        "- GET /v1/instruments/{symbol}/bars - свечи\n"
-        "- GET /v1/accounts/{account_id} - счет и позиции\n"
-        "- GET /v1/accounts/{account_id}/orders - ордера\n"
-        "- POST /v1/accounts/{account_id}/orders - создать ордер\n"
-        "- DELETE /v1/accounts/{account_id}/orders/{order_id} - отменить ордер\n"
-        "- GET /v1/assets - получить все ассеты.\n"
-        "- GET /v1/assets/{symbol}?account_id={account_id} - получить информацию по конкретному инструменту\n"
-        "- GET /v1/assets/{symbol}/params?account_id={account_id} - получить торговые параметры по инструменты\n"
-        "\n"
-        
-        # f"Доступные активы: \n {assets_text}\n\n"
-        
-        f"Текущее время: {datetime.datetime.now().isoformat()}\n\n"
-        
-        """Отвечай на русском, кратко и по делу."""
-    )
-
-def extract_api_request(text: str) -> tuple[str | None, str | None]:
-    """Извлечь API запрос из ответа LLM"""
-    if "API_REQUEST:" not in text:
-        return None, None
-
-    lines = text.split("\n")
-    for line in lines:
-        if line.strip().startswith("API_REQUEST:"):
-            request = line.replace("API_REQUEST:", "").strip()
-            parts = request.split(maxsplit=1)
-            if len(parts) == 2:
-                return parts[0], parts[1]
-    return None, None
+from src.app.core.llm import extract_api_request, create_system_prompt
 
 
 def main() -> None:  # noqa: C901
@@ -137,7 +91,7 @@ def main() -> None:  # noqa: C901
             st.markdown(prompt)
 
         # Формируем историю для LLM
-        conversation_history = [{"role": "system", "content": create_system_prompt(finam_client)}]
+        conversation_history = [{"role": "system", "content": create_system_prompt()}]
         for msg in st.session_state.messages:
             conversation_history.append({"role": msg["role"], "content": msg["content"]})
 
@@ -155,6 +109,9 @@ def main() -> None:  # noqa: C901
                     # Подставляем account_id если есть
                     if account_id and "{account_id}" in path:  # noqa: RUF027
                         path = path.replace("{account_id}", account_id)
+
+                    if "{symbol}" in path:
+                        print(path)
 
                     # Показываем что делаем запрос
                     st.info(f"🔍 Выполняю запрос: `{method} {path}`")
