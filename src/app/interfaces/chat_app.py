@@ -185,7 +185,8 @@ def main() -> None:  # noqa: C901
                 method, path = extract_api_request(assistant_message)
 
                 api_data = None
-                for _ in range(3):
+                MAX_REQUESTS = 4
+                for req_num in range(MAX_REQUESTS):
                     if method is None and path is None:
                         break
                     # Подставляем account_id если есть
@@ -221,7 +222,10 @@ def main() -> None:  # noqa: C901
                     conversation_history.append({"role": "assistant", "content": assistant_message})
                     conversation_history.append({
                         "role": "user",
-                        "content": f"Эндпоинт: {path}\nРезультат API: {json.dumps(api_response, ensure_ascii=False)[:8192]}\n\nПроанализируй.\n Также ты можешь отправить другой запрос.",
+                        "content": f"Эндпоинт: {path}\n"
+                                   f"Результат API: {json.dumps(api_response, ensure_ascii=False)[:8192]}\n\n"
+                                   f"Проанализируй.\n"
+                                   f"Также ты можешь отправить другой запрос." if req_num < MAX_REQUESTS - 1 else "",
                     })
 
                     # Получаем финальный ответ
