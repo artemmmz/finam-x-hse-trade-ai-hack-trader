@@ -40,7 +40,7 @@ def create_system_prompt() -> str:
         "1. Определи нужный API endpoint\n"
         "2. Укажи запрос в формате: API_REQUEST: METHOD /path\n"
         "3. Всегда заменяй в endpoint {symbol} на {symbol:НАЗВАНИЕ} с названием компании в нужном падеже, но строки формата TICKER@MIC в path оставляй без изменений!\n"
-        "4. После получения данных - проанализируй их и дай понятный ответ\n\n"
+        "4. После получения данных - проанализируй их и дай понятный ответ. \n\n"
 
         """Доступные endpoints:
         - GET /v1/exchanges - список бирж
@@ -49,6 +49,7 @@ def create_system_prompt() -> str:
         - GET /v1/assets/{symbol}/params?account_id={account_id} - параметры инструмента (актива, акции) для счета
         - GET /v1/assets/{symbol}/schedule - расписание торгов
         - GET /v1/assets/{symbol}/options - опционы на базовый актив
+        - GET /v1/assets/clock - серверное время
         - GET /v1/instruments/{symbol}/quotes/latest - последняя котировка
         - GET /v1/instruments/{symbol}/orderbook - биржевой стакан
         - GET /v1/instruments/{symbol}/trades/latest - лента сделок
@@ -60,7 +61,7 @@ def create_system_prompt() -> str:
         - GET /v1/accounts/{account_id}/trades - история сделок
         - GET /v1/accounts/{account_id}/transactions - транзакции по счету
         - POST /v1/sessions - создание новой сессии
-        - POST /v1/sessions/details - детали текущей сессии
+        - POST /v1/sessions/details - детали текущей сессии, проверка действительности токена
         - POST /v1/accounts/{account_id}/orders - создание ордера
         - DELETE /v1/accounts/{account_id}/orders/{order_id} - отмена ордера
         
@@ -69,40 +70,9 @@ def create_system_prompt() -> str:
         
         f"Текущее время: {datetime.datetime.now().isoformat()}\n\n"
         
-        """Примеры запросов:
-        Q: Доступна ли покупка акций 'Мечел' на счете 77777?
-        A: API_REQUEST: GET /v1/assets/{symbol:Мечел}/params?account_id=77777
-        
-        Q: Цена последней сделки по ROSN@MISX.
-        A: API_REQUEST: GET: /v1/instruments/ROSN@MISX/quotes/latest
-        
-        Q: Купи 2 фьючерса на газ NGZ5@RTSX по рынку
-        A: API_REQUEST: POST /v1/accounts/{account_id}/orders
-        
-        Q: Покажи расписание клиринга для акций 'МосБиржи'.
-        A: API_REQUEST: GET /v1/assets/{symbol:МосБиржа}/schedule
-        
-        Q: Покажи детали по ордеру ORD314159
-        A: API_REQUEST: GET /v1/accounts/{account_id}/orders/ORD314159
-        
-        Q: Какое гарантийное обеспечение для фьючерса SiZ5@RTSX на счете ACC-001-A?
-        A: API_REQUEST: GET /v1/accounts/ACC-001-A
-        
-        Q: Сколько сделок было совершено в августе 2025?
-        A: API_REQUEST: GET /v1/accounts/{account_id}/trades?interval.start_time=2025-08-01T00:00:00Z&interval.end_time=2025-08-31T23:59:59Z
-        
-        Q: Какой тикер у инструмента с ISIN RU0009029540?
-        A: API_REQUEST: GET /v1/assets
-        
-        Q: Дай мне историю цен на Apple за январь 2025 года с часовым интервалом.;
-        A: API_REQUEST: GET /v1/instruments/{symbol}/bars?timeframe=TIME_FRAME_H1&interval.start_time=2025-01-01T00:00:00Z&interval.end_time=2025-01-31T23:59:59Z
-        
-        Q: Выгрузить все транзакции за последнюю неделю
-        A: API_REQUEST: GET /v1/accounts/FIN-203-B/transactions?interval.start_time=2025-09-22T00:00:00Z&interval.end_time=2025-09-28T23:59:59Z
-        \n
-        """
+        f"""Примеры запросов: \n{examples_text}\n"""
 
-        """Отвечай на русском, кратко и по делу.\n"""
+        """Отвечай на русском, КРАТКО И ПО ДЕЛУ!!\n"""
     )
 
 
