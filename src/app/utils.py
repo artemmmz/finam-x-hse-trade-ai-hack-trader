@@ -1,4 +1,4 @@
-from app.adapters import FinamAPIClient
+from src.app.adapters import FinamAPIClient
 
 import re
 from rapidfuzz import fuzz
