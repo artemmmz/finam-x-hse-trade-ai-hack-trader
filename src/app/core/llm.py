@@ -39,7 +39,8 @@ def create_system_prompt() -> str:
         "Когда пользователь задает вопрос о рынке, портфеле или хочет совершить действие:\n"
         "1. Определи нужный API endpoint\n"
         "2. Укажи запрос в формате: API_REQUEST: METHOD /path\n"
-        "3. Если видишь {symbol} - оставляй его в виде {symbol:НАЗВАНИЕ} в path, я сам подставлю, кроме строк формата TICKER@MIC.\n"
+        "3. Если видишь {symbol} - пиши его в виде {symbol:НАЗВАНИЕ} (к примеру, {symbol:Газпром})  "
+        "в path, я сам подставлю, кроме строк формата TICKER@MIC.\n"
         "4. После получения данных - проанализируй их и дай понятный ответ\n\n"
 
         """Доступные endpoints:
@@ -66,8 +67,6 @@ def create_system_prompt() -> str:
         
         Timeframes: TIME_FRAME_M1, TIME_FRAME_M5, TIME_FRAME_M15, TIME_FRAME_M30, TIME_FRAME_H1, TIME_FRAME_H4, TIME_FRAME_D, TIME_FRAME_W, TIME_FRAME_MN"""
         "\n\n"
-        
-        "symbol - Символ инструмента указывается в формате ticker@mic, если он так не указан - оставь {symbol}.\n\n"
         
         f"Текущее время: {datetime.datetime.now().isoformat()}\n\n"
 

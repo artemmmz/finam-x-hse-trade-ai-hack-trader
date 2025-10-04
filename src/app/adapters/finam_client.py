@@ -4,6 +4,7 @@ https://tradeapi.finam.ru/
 """
 
 import os
+from functools import lru_cache
 from typing import Any
 
 import requests
@@ -135,6 +136,7 @@ class FinamAPIClient:
         """Получить детали текущей сессии"""
         return self.execute_request("POST", "/v1/sessions/details")
 
+    @lru_cache
     def get_assets(self) -> dict[str, Any]:
         """Получить доступные активы"""
         return self.execute_request("GET", "/v1/assets")

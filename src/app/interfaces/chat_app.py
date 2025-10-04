@@ -12,6 +12,7 @@ import datetime
 
 import streamlit as st
 
+from app.utils import get_asset_from_text
 from src.app.adapters import FinamAPIClient
 from src.app.core import call_llm, get_settings
 from src.app.core.llm import extract_api_request, create_system_prompt
@@ -110,8 +111,12 @@ def main() -> None:  # noqa: C901
                     if account_id and "{account_id}" in path:  # noqa: RUF027
                         path = path.replace("{account_id}", account_id)
 
-                    if "{symbol}" in path:
-                        print(path)
+                    if "{symbol" in path:
+                        start = path.index("{symbol:") + len("{symbol:")
+                        end = path.index("}")
+                        name = path[start: end]
+                        asset = get_asset_from_text(name, finam_client)
+                        path = path.replace(f"{{symbol:{name}}}", asset)
 
                     # Показываем что делаем запрос
                     st.info(f"🔍 Выполняю запрос: `{method} {path}`")
