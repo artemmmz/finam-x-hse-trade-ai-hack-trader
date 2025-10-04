@@ -21,9 +21,16 @@ import random
 from pathlib import Path
 
 import click
+from dotenv import load_dotenv
 from tqdm import tqdm  # type: ignore[import-untyped]
 
+from app.adapters import FinamAPIClient
+from app.core import get_settings
+# from app.core.llm import create_system_prompt
+from app.utils import get_asset_from_text
 from src.app.core.llm import call_llm
+
+load_dotenv()
 
 
 def calculate_cost(usage: dict, model: str) -> float:
@@ -73,52 +80,67 @@ def load_train_examples(train_file: Path, num_examples: int = 10) -> list[dict[s
     return selected[:num_examples]
 
 
-def create_prompt(question: str, examples: list[dict[str, str]]) -> str:
-    """Создать промпт для LLM с few-shot примерами"""
-    prompt = """Ты - эксперт по Finam TradeAPI. Твоя задача - преобразовать вопрос на русском языке в HTTP запрос к API.
-
-API Documentation:
-- GET /v1/exchanges - список бирж
-- GET /v1/assets - поиск инструментов
-- GET /v1/assets/{symbol} - информация об инструменте
-- GET /v1/assets/{symbol}/params - параметры инструмента для счета
-- GET /v1/assets/{symbol}/schedule - расписание торгов
-- GET /v1/assets/{symbol}/options - опционы на базовый актив
-- GET /v1/instruments/{symbol}/quotes/latest - последняя котировка
-- GET /v1/instruments/{symbol}/orderbook - биржевой стакан
-- GET /v1/instruments/{symbol}/trades/latest - лента сделок
-- GET /v1/instruments/{symbol}/bars - исторические свечи
-  (параметры: timeframe, interval.start_time, interval.end_time)
-- GET /v1/accounts/{account_id} - информация о счете
-- GET /v1/accounts/{account_id}/orders - список ордеров
-- GET /v1/accounts/{account_id}/orders/{order_id} - информация об ордере
-- GET /v1/accounts/{account_id}/trades - история сделок
-- GET /v1/accounts/{account_id}/transactions - транзакции по счету
-- POST /v1/sessions - создание новой сессии
-- POST /v1/sessions/details - детали текущей сессии
-- POST /v1/accounts/{account_id}/orders - создание ордера
-- DELETE /v1/accounts/{account_id}/orders/{order_id} - отмена ордера
-
-Timeframes: TIME_FRAME_M1, TIME_FRAME_M5, TIME_FRAME_M15, TIME_FRAME_M30,
-TIME_FRAME_H1, TIME_FRAME_H4, TIME_FRAME_D, TIME_FRAME_W, TIME_FRAME_MN
-
-Примеры:
-
-"""
-
-    for ex in examples:
-        prompt += f'Вопрос: "{ex["question"]}"\n'
-        prompt += f"Ответ: {ex['type']} {ex['request']}\n\n"
-
-    prompt += f'Вопрос: "{question}"\n'
-    prompt += "Ответ (только HTTP метод и путь, без объяснений):"
-
-    return prompt
+def create_system_prompt(examples: list[dict[str, str]]) -> str:
+    """Системный промпт"""
+    examples_text = "\n\n".join([f"Вопрос: {example['question']}\nОтвет: API_REQUEST: {example['type']} {example['request']}" for example in examples])
+    return ("Ты - AI ассистент трейдера, работающий с FinamTradeAPI.\n\n"
+        
+        "АЛГОРИТМ РАБОТЫ:\n"
+        "1. Анализирую вопрос пользователя и определяю соответствующий API endpoint\n"
+        "2. Формирую точный запрос в одну строчку(!) в формате: API_REQUEST: METHOD /path\n"
+        "3. После получения данных анализирую их и даю понятный ответ\n\n"
+            
+        "ВАЖНЫЕ ПРАВИЛА:\n"
+        "- {symbol} всегда используется в формате TICKER@MIC (например: VTBR@MISX, SVM5@RTSX)\n"
+        "- Для получения параметров инструмента (лот, шаг цены) используй /v1/assets/{symbol}/params\n"  
+        "- Для информации об инструменте (тикер, ISIN, дата экспирации) используй /v1/assets/{symbol}\n"
+        
+        "ДОСТУПНЫЕ ENDPOINTS:\n"
+        "Справочная информация:\n"
+        "- GET /v1/exchanges - список бирж\n"
+        "- GET /v1/assets - поиск инструментов\n"
+        "- GET /v1/assets/{symbol}?account_id={account_id} - информация об инструменте\n"
+        "- GET /v1/assets/{symbol}/params?account_id={account_id} - параметры инструмента для счета\n"
+        "- GET /v1/assets/{symbol}/schedule - расписание торгов\n"
+        "- GET /v1/assets/{symbol}/options - опционы на базовый актив\n"
+        "- GET /v1/assets/clock - серверное время\n\n"
+        
+        "Рыночные данные:\n"
+        "- GET /v1/instruments/{symbol}/quotes/latest - последняя котировка\n"
+        "- GET /v1/instruments/{symbol}/orderbook - биржевой стакан\n"
+        "- GET /v1/instruments/{symbol}/trades/latest - лента сделок\n"
+        "- GET /v1/instruments/{symbol}/bars - исторические свечи (timeframe, interval.start_time, interval.end_time)\n\n"
+        
+        "Работа со счетами и ордерами:\n"
+        "- GET /v1/accounts/{account_id} - информация о счете\n"
+        "- GET /v1/accounts/{account_id}/orders - список ордеров\n"
+        "- GET /v1/accounts/{account_id}/orders/{order_id} - информация об ордере\n"
+        "- GET /v1/accounts/{account_id}/trades - история сделок\n"
+        "- GET /v1/accounts/{account_id}/transactions - транзакции по счету\n"
+        "- POST /v1/accounts/{account_id}/orders - создание ордера\n"
+        "- DELETE /v1/accounts/{account_id}/orders/{order_id} - отмена ордера\n\n"
+        
+        "Сессии:\n"
+        "- POST /v1/sessions - создание новой сессии\n"
+        "- POST /v1/sessions/details - детали текущей сессии\n\n"
+        
+        f"ПРИМЕРЫ ЗАПРОСОВ:\n{examples_text}\n\n"
+        
+        "ТРЕБОВАНИЯ К ОТВЕТУ:\n"
+        "- Различать /v1/assets/{symbol} и /v1/assets/{symbol}/params\n"
+        "- Точное соответствие endpoint запросу пользователя\n"
+        "- Полнота - не пропускать нужные endpoints\n"
+        "- Краткость и ясность ответа\n"
+        "- Четкое форматирование API запроса")
 
 
 def parse_llm_response(response: str) -> tuple[str, str]:
     """Парсинг ответа LLM в (type, request)"""
     response = response.strip()
+
+    if not response.startswith("API_REQUEST:"):
+        return "", ""
+    response = response[len("API_REQUEST: "):]
 
     # Ищем HTTP метод в начале
     methods = ["GET", "POST", "DELETE", "PUT", "PATCH"]
@@ -141,9 +163,21 @@ def parse_llm_response(response: str) -> tuple[str, str]:
                 request = part
                 break
 
+    nextline = request.find("\n")
+    if nextline > -1:
+        request = request[:nextline]
+
     # Fallback на безопасный вариант
     if not request.startswith("/"):
         request = "/v1/assets"
+
+    if "{symbol:" in request:
+        start = request.index("{symbol:") + len("{symbol:")
+        end = request.index("}")
+        name = request[start: end]
+        finam_client = FinamAPIClient()
+        asset = get_asset_from_text(name, finam_client)
+        request = request.replace(f"{{symbol:{name}}}", asset)
 
     return method, request
 
@@ -154,12 +188,12 @@ def generate_api_call(question: str, examples: list[dict[str, str]], model: str)
     Returns:
         tuple: (result_dict, cost_in_dollars)
     """
-    prompt = create_prompt(question, examples)
+    prompt = create_system_prompt(examples)
 
-    messages = [{"role": "user", "content": prompt}]
+    messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
 
     try:
-        response = call_llm(messages, temperature=0.0, max_tokens=200)
+        response = call_llm(messages, temperature=0.1, max_tokens=200)
         llm_answer = response["choices"][0]["message"]["content"].strip()
 
         method, request = parse_llm_response(llm_answer)
