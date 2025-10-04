@@ -2,7 +2,7 @@
 name = "finam-x-hse-trade-ai-hack-trader"
 version = "0.1.0"
 description = "Trader AI Assistant over Finam TradeAPI"
-authors = ["Maxim Kirilyuk <werserk@inbox.ru>"]
+authors = ["Maxim Kirilyuk <werserk@inbox.ru>", "Artem Zlobin <arzar0046@gmail.com>"]
 readme = "README.md"
 packages = [{ include = "app", from = "src" }]
 
