@@ -106,12 +106,14 @@ def main() -> None:  # noqa: C901
                 method, path = extract_api_request(assistant_message)
 
                 api_data = None
-                if method and path:
+                for _ in range(3):
+                    if method is None and path is None:
+                        break
                     # Подставляем account_id если есть
                     if account_id and "{account_id}" in path:  # noqa: RUF027
                         path = path.replace("{account_id}", account_id)
 
-                    if "{symbol" in path:
+                    if "{symbol:" in path:
                         start = path.index("{symbol:") + len("{symbol:")
                         end = path.index("}")
                         name = path[start: end]
@@ -140,12 +142,14 @@ def main() -> None:  # noqa: C901
                     conversation_history.append({"role": "assistant", "content": assistant_message})
                     conversation_history.append({
                         "role": "user",
-                        "content": f"Результат API: {json.dumps(api_response, ensure_ascii=False)}\n\nПроанализируй.",
+                        "content": f"Эндпоинт: {path}\nРезультат API: {json.dumps(api_response, ensure_ascii=False)[:8192]}\n\nПроанализируй.\n Также ты можешь отправить другой запрос.",
                     })
 
                     # Получаем финальный ответ
                     response = call_llm(conversation_history, temperature=0.3)
                     assistant_message = response["choices"][0]["message"]["content"]
+
+                    method, path = extract_api_request(assistant_message)
 
                 st.markdown(assistant_message)
 

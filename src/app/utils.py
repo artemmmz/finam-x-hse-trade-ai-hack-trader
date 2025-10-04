@@ -18,7 +18,8 @@ def translit_ru_to_en(text: str) -> str:
 def normalize_company_name(name: str) -> str:
     name = name.lower()
     name = translit_ru_to_en(name)
-    name = re.sub(r'\b(ооо|ао|пао|зао|оао|ллтд|лдт|инк|лтк|лцд|лц)\b', '', name)
+    name = re.sub(r'\b(ooo|ao|pao|zao|oao|ltd|llc|inc|corp|company)\b', '', name)
+    name = re.sub(r'[!@#$%^&*()_+=-]', "", name)
     return name.strip()
 
 
