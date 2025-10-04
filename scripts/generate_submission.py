@@ -23,6 +23,9 @@ from pathlib import Path
 import click
 from tqdm import tqdm  # type: ignore[import-untyped]
 
+from app.adapters import FinamAPIClient
+from app.core.llm import create_system_prompt
+from app.utils import get_asset_from_text
 from src.app.core.llm import call_llm
 
 
@@ -73,49 +76,6 @@ def load_train_examples(train_file: Path, num_examples: int = 10) -> list[dict[s
     return selected[:num_examples]
 
 
-def create_prompt(question: str, examples: list[dict[str, str]]) -> str:
-    """Создать промпт для LLM с few-shot примерами"""
-    prompt = """Ты - эксперт по Finam TradeAPI. Твоя задача - преобразовать вопрос на русском языке в HTTP запрос к API.
-
-API Documentation:
-- GET /v1/exchanges - список бирж
-- GET /v1/assets - поиск инструментов
-- GET /v1/assets/{symbol} - информация об инструменте
-- GET /v1/assets/{symbol}/params - параметры инструмента для счета
-- GET /v1/assets/{symbol}/schedule - расписание торгов
-- GET /v1/assets/{symbol}/options - опционы на базовый актив
-- GET /v1/instruments/{symbol}/quotes/latest - последняя котировка
-- GET /v1/instruments/{symbol}/orderbook - биржевой стакан
-- GET /v1/instruments/{symbol}/trades/latest - лента сделок
-- GET /v1/instruments/{symbol}/bars - исторические свечи
-  (параметры: timeframe, interval.start_time, interval.end_time)
-- GET /v1/accounts/{account_id} - информация о счете
-- GET /v1/accounts/{account_id}/orders - список ордеров
-- GET /v1/accounts/{account_id}/orders/{order_id} - информация об ордере
-- GET /v1/accounts/{account_id}/trades - история сделок
-- GET /v1/accounts/{account_id}/transactions - транзакции по счету
-- POST /v1/sessions - создание новой сессии
-- POST /v1/sessions/details - детали текущей сессии
-- POST /v1/accounts/{account_id}/orders - создание ордера
-- DELETE /v1/accounts/{account_id}/orders/{order_id} - отмена ордера
-
-Timeframes: TIME_FRAME_M1, TIME_FRAME_M5, TIME_FRAME_M15, TIME_FRAME_M30,
-TIME_FRAME_H1, TIME_FRAME_H4, TIME_FRAME_D, TIME_FRAME_W, TIME_FRAME_MN
-
-Примеры:
-
-"""
-
-    for ex in examples:
-        prompt += f'Вопрос: "{ex["question"]}"\n'
-        prompt += f"Ответ: {ex['type']} {ex['request']}\n\n"
-
-    prompt += f'Вопрос: "{question}"\n'
-    prompt += "Ответ (только HTTP метод и путь, без объяснений):"
-
-    return prompt
-
-
 def parse_llm_response(response: str) -> tuple[str, str]:
     """Парсинг ответа LLM в (type, request)"""
     response = response.strip()
@@ -145,6 +105,14 @@ def parse_llm_response(response: str) -> tuple[str, str]:
     if not request.startswith("/"):
         request = "/v1/assets"
 
+    if "{symbol:" in request:
+        start = request.index("{symbol:") + len("{symbol:")
+        end = request.index("}")
+        name = request[start: end]
+        finam_client = FinamAPIClient()
+        asset = get_asset_from_text(name, finam_client)
+        request = request.replace(f"{{symbol:{name}}}", asset)
+
     return method, request
 
 
@@ -154,12 +122,12 @@ def generate_api_call(question: str, examples: list[dict[str, str]], model: str)
     Returns:
         tuple: (result_dict, cost_in_dollars)
     """
-    prompt = create_prompt(question, examples)
+    prompt = create_system_prompt()
 
-    messages = [{"role": "user", "content": prompt}]
+    messages = [{"role": "system", "content": prompt}, {"role": "user", "content": question}]
 
     try:
-        response = call_llm(messages, temperature=0.0, max_tokens=200)
+        response = call_llm(messages, temperature=0.3, max_tokens=200)
         llm_answer = response["choices"][0]["message"]["content"].strip()
 
         method, request = parse_llm_response(llm_answer)

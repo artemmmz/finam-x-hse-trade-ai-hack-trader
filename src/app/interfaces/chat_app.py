@@ -8,47 +8,14 @@ Streamlit веб-интерфейс для AI ассистента трейде�
 """
 
 import json
+import datetime
 
 import streamlit as st
 
+from app.utils import get_asset_from_text
 from src.app.adapters import FinamAPIClient
 from src.app.core import call_llm, get_settings
-
-
-def create_system_prompt() -> str:
-    """Создать системный промпт для AI ассистента"""
-    return """Ты - AI ассистент трейдера, работающий с Finam TradeAPI.
-
-Когда пользователь задает вопрос о рынке, портфеле или хочет совершить действие:
-1. Определи нужный API endpoint
-2. Укажи запрос в формате: API_REQUEST: METHOD /path
-3. После получения данных - проанализируй их и дай понятный ответ
-
-Доступные endpoints:
-- GET /v1/instruments/{symbol}/quotes/latest - котировка
-- GET /v1/instruments/{symbol}/orderbook - стакан
-- GET /v1/instruments/{symbol}/bars - свечи
-- GET /v1/accounts/{account_id} - счет и позиции
-- GET /v1/accounts/{account_id}/orders - ордера
-- POST /v1/accounts/{account_id}/orders - создать ордер
-- DELETE /v1/accounts/{account_id}/orders/{order_id} - отменить ордер
-
-Отвечай на русском, кратко и по делу."""
-
-
-def extract_api_request(text: str) -> tuple[str | None, str | None]:
-    """Извлечь API запрос из ответа LLM"""
-    if "API_REQUEST:" not in text:
-        return None, None
-
-    lines = text.split("\n")
-    for line in lines:
-        if line.strip().startswith("API_REQUEST:"):
-            request = line.replace("API_REQUEST:", "").strip()
-            parts = request.split(maxsplit=1)
-            if len(parts) == 2:
-                return parts[0], parts[1]
-    return None, None
+from src.app.core.llm import extract_api_request, create_system_prompt
 
 
 def main() -> None:  # noqa: C901
@@ -139,10 +106,19 @@ def main() -> None:  # noqa: C901
                 method, path = extract_api_request(assistant_message)
 
                 api_data = None
-                if method and path:
+                for _ in range(3):
+                    if method is None and path is None:
+                        break
                     # Подставляем account_id если есть
                     if account_id and "{account_id}" in path:  # noqa: RUF027
                         path = path.replace("{account_id}", account_id)
+
+                    if "{symbol:" in path:
+                        start = path.index("{symbol:") + len("{symbol:")
+                        end = path.index("}")
+                        name = path[start: end]
+                        asset = get_asset_from_text(name, finam_client)
+                        path = path.replace(f"{{symbol:{name}}}", asset)
 
                     # Показываем что делаем запрос
                     st.info(f"🔍 Выполняю запрос: `{method} {path}`")
@@ -166,12 +142,14 @@ def main() -> None:  # noqa: C901
                     conversation_history.append({"role": "assistant", "content": assistant_message})
                     conversation_history.append({
                         "role": "user",
-                        "content": f"Результат API: {json.dumps(api_response, ensure_ascii=False)}\n\nПроанализируй.",
+                        "content": f"Эндпоинт: {path}\nРезультат API: {json.dumps(api_response, ensure_ascii=False)[:8192]}\n\nПроанализируй.\n Также ты можешь отправить другой запрос.",
                     })
 
                     # Получаем финальный ответ
                     response = call_llm(conversation_history, temperature=0.3)
                     assistant_message = response["choices"][0]["message"]["content"]
+
+                    method, path = extract_api_request(assistant_message)
 
                 st.markdown(assistant_message)
 
